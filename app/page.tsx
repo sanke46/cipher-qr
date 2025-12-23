@@ -61,10 +61,13 @@ export default function Home() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="border-b border-white/10 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto px-4 py-4">
-          <h1 className="text-xl font-bold">ПиП QR-Decoder</h1>
-          <p className="text-sm text-muted">Дешифровка платёжных QR-кодов</p>
+      <header className="border-b border-white/5 bg-black/30 backdrop-blur-xl sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
+          <img src="/icon.png" alt="Logo" className="w-10 h-10" />
+          <div>
+            <h1 className="text-xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">ПиП QR-Decoder</h1>
+            <p className="text-sm text-muted">Дешифровка платёжных QR-кодов</p>
+          </div>
         </div>
       </header>
 
@@ -207,9 +210,9 @@ export default function Home() {
                   </div>
                 ) : (
                   <div className="card h-full flex flex-col items-center justify-center text-center">
-                    <div className="text-4xl mb-3">🔐</div>
+                    <div className="text-4xl mb-3">📱</div>
                     <p className="text-muted">Вставьте зашифрованную строку</p>
-                    <p className="text-muted/60 text-sm mt-1">Или нажмите "Пример"</p>
+                    <p className="text-muted/60 text-sm mt-1">Результат появится здесь</p>
                   </div>
                 )}
               </div>
