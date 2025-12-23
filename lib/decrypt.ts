@@ -1,10 +1,19 @@
-// Таблица дешифровки: латиница → кириллица
+// Таблица дешифровки для текста в кавычках (кастомная подстановка)
 const DECRYPT_MAP: Record<string, string> = {
   'a': 'к', 'b': 'л', 'c': 'м', 'd': 'н', 'e': 'о',
   'f': 'п', 'g': 'р', 'h': 'с', 'i': 'т', 'j': 'у',
   'k': 'ф', 'l': 'х', 'm': 'ц', 'n': 'ч', 'o': 'ш',
   'p': 'щ', 'q': 'а', 'r': 'б', 's': 'в', 't': 'э',
   'u': 'д', 'v': 'е', 'w': 'ж', 'x': 'з', 'y': 'и', 'z': 'й'
+}
+
+// Стандартная транслитерация Latin → Cyrillic (для префиксов после Caesar -3)
+const TRANSLIT_MAP: Record<string, string> = {
+  'a': 'а', 'b': 'б', 'c': 'ц', 'd': 'д', 'e': 'е',
+  'f': 'ф', 'g': 'г', 'h': 'х', 'i': 'и', 'j': 'й',
+  'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о',
+  'p': 'п', 'q': 'к', 'r': 'р', 's': 'с', 't': 'т',
+  'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс', 'y': 'ы', 'z': 'з'
 }
 
 // Альтернативные варианты для коллизий (используются при контекстном анализе)
@@ -23,6 +32,20 @@ export function caesarDecrypt(text: string, shift: number = 3): string {
     if (/[a-z]/i.test(char)) {
       const base = char === char.toUpperCase() ? 65 : 97
       return String.fromCharCode(((char.charCodeAt(0) - base - shift + 26) % 26) + base)
+    }
+    return char
+  }).join('')
+}
+
+// ============================================
+// Стандартная транслитерация (для префиксов)
+// ============================================
+function transliterate(text: string): string {
+  return text.split('').map(char => {
+    const lower = char.toLowerCase()
+    const mapped = TRANSLIT_MAP[lower]
+    if (mapped) {
+      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
     }
     return char
   }).join('')
@@ -118,21 +141,23 @@ export function decryptQRCode(encrypted: string): DecryptResult {
         return '"' + smartSubstitution(match) + '"'
       })
 
-      // Текст перед кавычками (НБ, ПАО и т.д.)
+      // Текст перед кавычками (НБ, ПАО и т.д.) - Caesar -3, потом транслитерация
       const quoteStart = value.indexOf('"')
       if (quoteStart > 0) {
         const prefix = value.substring(0, quoteStart).trim()
         const rest = value.substring(quoteStart)
-        value = smartSubstitution(prefix) + ' ' + rest
+        const decryptedPrefix = transliterate(caesarDecrypt(prefix, 3))
+        value = decryptedPrefix + ' ' + rest
       }
 
       // Для Purpose: расшифровываем текст до первого /
       if (name === 'Purpose' && !value.includes('"')) {
         const slashIndex = value.indexOf('/')
         if (slashIndex !== -1) {
-          value = smartSubstitution(value.substring(0, slashIndex)) + value.substring(slashIndex)
+          // Caesar -3, потом транслитерация для текста Purpose
+          value = transliterate(caesarDecrypt(value.substring(0, slashIndex), 3)) + value.substring(slashIndex)
         } else {
-          value = smartSubstitution(value)
+          value = transliterate(caesarDecrypt(value, 3))
         }
       }
     }
