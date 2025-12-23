@@ -63,7 +63,7 @@ export default function Home() {
       {/* Header */}
       <header className="border-b border-white/5 bg-black/30 backdrop-blur-xl sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-3">
-          <img src="/icon.png" alt="Logo" className="w-10 h-10" />
+          <img src="/logo.png" alt="Logo" className="w-10 h-10" />
           <div>
             <h1 className="text-xl font-bold bg-gradient-to-r from-white to-white/70 bg-clip-text text-transparent">ПиП QR-Decoder</h1>
             <p className="text-sm text-muted">Дешифровка платёжных QR-кодов</p>
