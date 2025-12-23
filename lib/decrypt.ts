@@ -1,4 +1,6 @@
-// Таблица дешифровки для текста в кавычках (кастомная подстановка)
+import { fixRussianText } from './llm'
+
+// Таблица подстановки для дешифровки (латиница → кириллица)
 const DECRYPT_MAP: Record<string, string> = {
   'a': 'к', 'b': 'л', 'c': 'м', 'd': 'н', 'e': 'о',
   'f': 'п', 'g': 'р', 'h': 'с', 'i': 'т', 'j': 'у',
@@ -7,193 +9,18 @@ const DECRYPT_MAP: Record<string, string> = {
   'u': 'д', 'v': 'е', 'w': 'ж', 'x': 'з', 'y': 'и', 'z': 'й'
 }
 
-// Таблица шифрования (обратная DECRYPT_MAP + DECRYPT_ALT)
+// Обратная таблица для шифрования (кириллица → латиница)
 const ENCRYPT_MAP: Record<string, string> = {
   'к': 'a', 'л': 'b', 'м': 'c', 'н': 'd', 'о': 'e',
   'п': 'f', 'р': 'g', 'с': 'h', 'т': 'i', 'у': 'j',
   'ф': 'k', 'х': 'l', 'ц': 'm', 'ч': 'n', 'ш': 'o',
   'щ': 'p', 'а': 'q', 'б': 'r', 'в': 's', 'э': 't',
   'д': 'u', 'е': 'v', 'ж': 'w', 'з': 'x', 'и': 'y', 'й': 'z',
-  // Из DECRYPT_ALT
+  // Альтернативные варианты (для шифрования используем основной)
   'ъ': 'q', 'ы': 'r', 'ь': 's', 'г': 't', 'ю': 'u', 'я': 'v'
 }
 
-// Стандартная транслитерация Latin → Cyrillic (для префиксов после Caesar -3)
-const TRANSLIT_MAP: Record<string, string> = {
-  'a': 'а', 'b': 'б', 'c': 'ц', 'd': 'д', 'e': 'е',
-  'f': 'ф', 'g': 'г', 'h': 'х', 'i': 'и', 'j': 'й',
-  'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о',
-  'p': 'п', 'q': 'к', 'r': 'р', 's': 'с', 't': 'т',
-  'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс', 'y': 'ы', 'z': 'з'
-}
-
-// Обратная транслитерация Cyrillic → Latin (для шифрования префиксов)
-const REVERSE_TRANSLIT_MAP: Record<string, string> = {
-  'а': 'a', 'б': 'b', 'ц': 'c', 'д': 'd', 'е': 'e',
-  'ф': 'f', 'г': 'g', 'х': 'h', 'и': 'i', 'й': 'j',
-  'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
-  'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
-  'у': 'u', 'в': 'v', 'ы': 'y', 'з': 'z'
-}
-
-// Альтернативные варианты для коллизий (используются при контекстном анализе)
-const DECRYPT_ALT: Record<string, string> = {
-  'q': 'ъ', 'r': 'ы', 's': 'ь', 't': 'г', 'u': 'ю', 'v': 'я'
-}
-
-// Поля с кириллицей
-const CYRILLIC_FIELDS = ['Name', 'BankName', 'Purpose']
-
-// ============================================
-// Шифр Цезаря (дешифровка, сдвиг -3)
-// ============================================
-export function caesarDecrypt(text: string, shift: number = 3): string {
-  return text.split('').map(char => {
-    if (/[a-z]/i.test(char)) {
-      const base = char === char.toUpperCase() ? 65 : 97
-      return String.fromCharCode(((char.charCodeAt(0) - base - shift + 26) % 26) + base)
-    }
-    return char
-  }).join('')
-}
-
-// ============================================
-// Проверка URL (URL не шифруются)
-// ============================================
-function isUrl(text: string): boolean {
-  try {
-    const url = new URL(text)
-    return url.host !== null && url.host !== ''
-  } catch {
-    return false
-  }
-}
-
-// ============================================
-// Шифр Цезаря (шифрование, сдвиг +3)
-// URL адреса НЕ шифруются!
-// ============================================
-export function caesarEncrypt(text: string, shift: number = 3): string {
-  // URL не шифруются
-  if (isUrl(text)) return text
-
-  return text.split('').map(char => {
-    if (/[a-z]/i.test(char)) {
-      const base = char === char.toUpperCase() ? 65 : 97
-      return String.fromCharCode(((char.charCodeAt(0) - base + shift) % 26) + base)
-    }
-    return char
-  }).join('')
-}
-
-// ============================================
-// Стандартная транслитерация (для префиксов)
-// ============================================
-function transliterate(text: string): string {
-  return text.split('').map(char => {
-    const lower = char.toLowerCase()
-    const mapped = TRANSLIT_MAP[lower]
-    if (mapped) {
-      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
-    }
-    return char
-  }).join('')
-}
-
-// ============================================
-// Умная замена с выбором варианта
-// ============================================
-function smartSubstitution(text: string): string {
-  const result: string[] = []
-  const chars = text.split('')
-
-  for (let i = 0; i < chars.length; i++) {
-    const char = chars[i]
-    const lower = char.toLowerCase()
-
-    if (DECRYPT_MAP[lower]) {
-      let replacement = DECRYPT_MAP[lower]
-
-      // Для коллизий выбираем вариант на основе контекста
-      if (DECRYPT_ALT[lower]) {
-        const nextChar = chars[i + 1]?.toLowerCase() || ''
-        const isNextLetter = nextChar && /[a-z]/.test(nextChar)
-
-        // Буквы, которые дают русские гласные: e→о, q→а, v→е, y→и
-        const vowelProducingChars = 'eqvy'
-
-        // 't' → 'э' или 'г'
-        // Если после 't' идёт буква дающая гласную → 'г', иначе → 'э'
-        if (lower === 't') {
-          if (vowelProducingChars.includes(nextChar)) {
-            replacement = 'г'
-          } else {
-            replacement = 'э'
-          }
-        }
-
-        // 'r' → 'б' или 'ы'
-        // Если после 'r' идёт другая 'r' или гласная → 'б' (бы, бе, ба...)
-        // Иначе (конец слова, согласная) → 'ы'
-        if (lower === 'r') {
-          if (nextChar === 'r' || vowelProducingChars.includes(nextChar)) {
-            replacement = 'б'
-          } else {
-            replacement = 'ы'
-          }
-        }
-
-        // 'u' → 'д' или 'ю'
-        // В конце слова или перед не-буквой → 'ю', иначе → 'д'
-        if (lower === 'u') {
-          if (!isNextLetter) {
-            replacement = 'ю'
-          } else {
-            replacement = 'д'
-          }
-        }
-      }
-
-      result.push(char === char.toUpperCase() ? replacement.toUpperCase() : replacement)
-    } else {
-      result.push(char)
-    }
-  }
-
-  return result.join('')
-}
-
-// ============================================
-// Обратная подстановка (Cyrillic → Latin) для шифрования
-// ============================================
-function reverseSubstitution(text: string): string {
-  return text.split('').map(char => {
-    const lower = char.toLowerCase()
-    const mapped = ENCRYPT_MAP[lower]
-    if (mapped) {
-      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
-    }
-    return char
-  }).join('')
-}
-
-// ============================================
-// Обратная транслитерация (Cyrillic → Latin) для шифрования префиксов
-// ============================================
-function reverseTransliterate(text: string): string {
-  return text.split('').map(char => {
-    const lower = char.toLowerCase()
-    const mapped = REVERSE_TRANSLIT_MAP[lower]
-    if (mapped) {
-      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
-    }
-    return char
-  }).join('')
-}
-
-// ============================================
 // Типы
-// ============================================
 export interface QRField {
   name: string
   value: string
@@ -205,13 +32,88 @@ export interface DecryptResult {
   raw: string
 }
 
-// ============================================
-// Основная функция дешифровки
-// ============================================
-export function decryptQRCode(encrypted: string): DecryptResult {
+// Шифр Цезаря (дешифровка, сдвиг -3)
+export function caesarDecrypt(text: string, shift: number = 3): string {
+  return text.split('').map(char => {
+    if (/[a-z]/i.test(char)) {
+      const base = char === char.toUpperCase() ? 65 : 97
+      return String.fromCharCode(((char.charCodeAt(0) - base - shift + 26) % 26) + base)
+    }
+    return char
+  }).join('')
+}
+
+// Шифр Цезаря (шифрование, сдвиг +3)
+export function caesarEncrypt(text: string, shift: number = 3): string {
+  return text.split('').map(char => {
+    if (/[a-z]/i.test(char)) {
+      const base = char === char.toUpperCase() ? 65 : 97
+      return String.fromCharCode(((char.charCodeAt(0) - base + shift) % 26) + base)
+    }
+    return char
+  }).join('')
+}
+
+// Проверка URL
+function isUrl(text: string): boolean {
+  try {
+    const url = new URL(text)
+    return url.host !== null && url.host !== ''
+  } catch {
+    return false
+  }
+}
+
+// Проверка: нужна ли подстановка для значения?
+function needsSubstitution(value: string): boolean {
+  // Если есть кириллица - НЕ нужна
+  if (/[а-яёА-ЯЁ]/.test(value)) return false
+
+  // Если нет латиницы - НЕ нужна
+  if (!/[a-zA-Z]/.test(value)) return false
+
+  // Если есть латиница с достаточным количеством букв - нужна
+  const letters = (value.match(/[a-zA-Z]/g) || []).length
+  const digits = (value.match(/\d/g) || []).length
+
+  // Если букв >= 2 или букв больше чем цифр
+  return letters >= 2 || letters > digits
+}
+
+// Простая подстановка (латиница → кириллица)
+function simpleSubstitution(text: string): string {
+  return text.split('').map(char => {
+    const lower = char.toLowerCase()
+    const mapped = DECRYPT_MAP[lower]
+    if (mapped) {
+      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
+    }
+    return char
+  }).join('')
+}
+
+// Обратная подстановка (кириллица → латиница)
+function reverseSubstitution(text: string): string {
+  return text.split('').map(char => {
+    const lower = char.toLowerCase()
+    const mapped = ENCRYPT_MAP[lower]
+    if (mapped) {
+      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
+    }
+    return char
+  }).join('')
+}
+
+// Основная функция дешифровки (async для LLM)
+export async function decryptQRCode(encrypted: string): Promise<DecryptResult> {
+  // URL не расшифровываем
+  if (isUrl(encrypted)) {
+    return { format: 'URL', fields: [], raw: encrypted }
+  }
+
   const parts = encrypted.trim().split('|')
 
-  // Формат: VW00012 → ST00012 (только Цезарь)
+  // Формат: VW00012 → ST00012 (Caesar -3)
   const format = caesarDecrypt(parts[0], 3)
 
   const fields: QRField[] = []
@@ -220,69 +122,83 @@ export function decryptQRCode(encrypted: string): DecryptResult {
     const eqIndex = parts[i].indexOf('=')
     if (eqIndex === -1) continue
 
-    // Ключ: применяем Цезарь
+    // Ключ: Caesar -3
     const encKey = parts[i].substring(0, eqIndex)
     const name = caesarDecrypt(encKey, 3)
 
-    // Значение
+    // Значение: подстановка если есть латиница
     let value = parts[i].substring(eqIndex + 1)
 
-    // Для полей с кириллицей - применяем подстановку
-    if (CYRILLIC_FIELDS.includes(name)) {
-      // Обрабатываем текст в кавычках
-      value = value.replace(/"([^"]+)"/g, (_, match) => {
-        return '"' + smartSubstitution(match) + '"'
+    if (needsSubstitution(value)) {
+      value = simpleSubstitution(value)
+    }
+
+    fields.push({ name, value })
+  }
+
+  // Собираем сырой результат
+  let raw = format + '|' + fields.map(f => `${f.name}=${f.value}`).join('|')
+
+  // LLM пост-обработка для исправления ошибок коллизий
+  try {
+    raw = await fixRussianText(raw)
+
+    // Парсим исправленный результат обратно в fields
+    const fixedParts = raw.split('|')
+    const fixedFormat = fixedParts[0]
+    const fixedFields: QRField[] = []
+
+    for (let i = 1; i < fixedParts.length; i++) {
+      const eqIndex = fixedParts[i].indexOf('=')
+      if (eqIndex === -1) continue
+      fixedFields.push({
+        name: fixedParts[i].substring(0, eqIndex),
+        value: fixedParts[i].substring(eqIndex + 1)
       })
+    }
 
-      // Текст перед кавычками (НБ, АО, ПАО и т.д.)
-      const quoteStart = value.indexOf('"')
-      if (quoteStart > 0) {
-        const prefix = value.substring(0, quoteStart).trim()
-        const rest = value.substring(quoteStart)
-        // 2-буквенные префиксы: Caesar + транслитерация (QE→NB→НБ)
-        // 3+ буквенные: подстановка (FQE→ПАО)
-        const decryptedPrefix = prefix.length <= 2
-          ? transliterate(caesarDecrypt(prefix, 3))
-          : smartSubstitution(prefix)
-        value = decryptedPrefix + ' ' + rest
-      }
+    return { format: fixedFormat, fields: fixedFields, raw }
+  } catch (error) {
+    console.error('LLM processing error:', error)
+    return { format, fields, raw }
+  }
+}
 
-      // Для Purpose: расшифровываем текст и латиницу после /
-      if (name === 'Purpose' && !value.includes('"')) {
-        const slashIndex = value.indexOf('/')
-        if (slashIndex !== -1) {
-          const beforeSlash = smartSubstitution(value.substring(0, slashIndex))
-          // Расшифровать латинские буквы после / (например BH → ЛС)
-          const afterSlash = value.substring(slashIndex).replace(/[A-Za-z]+/g, match => {
-            return smartSubstitution(match)
-          })
-          value = beforeSlash + afterSlash
-        } else {
-          value = smartSubstitution(value)
-        }
-      }
+// Синхронная версия без LLM (для шифрования и fallback)
+export function decryptQRCodeSync(encrypted: string): DecryptResult {
+  if (isUrl(encrypted)) {
+    return { format: 'URL', fields: [], raw: encrypted }
+  }
+
+  const parts = encrypted.trim().split('|')
+  const format = caesarDecrypt(parts[0], 3)
+  const fields: QRField[] = []
+
+  for (let i = 1; i < parts.length; i++) {
+    const eqIndex = parts[i].indexOf('=')
+    if (eqIndex === -1) continue
+
+    const encKey = parts[i].substring(0, eqIndex)
+    const name = caesarDecrypt(encKey, 3)
+
+    let value = parts[i].substring(eqIndex + 1)
+    if (needsSubstitution(value)) {
+      value = simpleSubstitution(value)
     }
 
     fields.push({ name, value })
   }
 
   const raw = format + '|' + fields.map(f => `${f.name}=${f.value}`).join('|')
-
   return { format, fields, raw }
 }
 
-// ============================================
-// Основная функция шифрования QR кода
-// ============================================
+// Шифрование QR кода
 export function encryptQRCode(decrypted: string): string {
-  // URL не шифруются
   if (isUrl(decrypted)) return decrypted
 
   const parts = decrypted.trim().split('|')
-
-  // Формат: ST00012 → VW00012 (только Цезарь)
   const encFormat = caesarEncrypt(parts[0], 3)
-
   const encParts: string[] = [encFormat]
 
   for (let i = 1; i < parts.length; i++) {
@@ -292,47 +208,15 @@ export function encryptQRCode(decrypted: string): string {
       continue
     }
 
-    // Ключ: применяем Цезарь +3
     const name = parts[i].substring(0, eqIndex)
-    const encKey = caesarEncrypt(name, 3)
-
-    // Значение
     let value = parts[i].substring(eqIndex + 1)
 
-    // Для полей с кириллицей - применяем обратную подстановку
-    if (CYRILLIC_FIELDS.includes(name)) {
-      // Обрабатываем текст в кавычках
-      value = value.replace(/"([^"]+)"/g, (_, match) => {
-        return '"' + reverseSubstitution(match) + '"'
-      })
+    // Ключ: Caesar +3
+    const encKey = caesarEncrypt(name, 3)
 
-      // Текст перед кавычками (НБ, АО, ПАО и т.д.)
-      const quoteStart = value.indexOf('"')
-      if (quoteStart > 0) {
-        const prefix = value.substring(0, quoteStart).trim()
-        const rest = value.substring(quoteStart)
-        // 2-буквенные префиксы: транслитерация + Caesar (НБ→NB→QE)
-        // 3+ буквенные: подстановка (ПАО→FQE)
-        const encryptedPrefix = prefix.length <= 2
-          ? caesarEncrypt(reverseTransliterate(prefix), 3)
-          : reverseSubstitution(prefix)
-        value = encryptedPrefix + ' ' + rest
-      }
-
-      // Для Purpose без кавычек: шифруем текст и латиницу после /
-      if (name === 'Purpose' && !value.includes('"')) {
-        const slashIndex = value.indexOf('/')
-        if (slashIndex !== -1) {
-          const beforeSlash = reverseSubstitution(value.substring(0, slashIndex))
-          // Шифровать кириллицу после / (например ЛС → BH)
-          const afterSlash = value.substring(slashIndex).replace(/[А-Яа-яЁё]+/g, match => {
-            return reverseSubstitution(match)
-          })
-          value = beforeSlash + afterSlash
-        } else {
-          value = reverseSubstitution(value)
-        }
-      }
+    // Значение: если есть кириллица - подстановка
+    if (/[а-яёА-ЯЁ]/.test(value)) {
+      value = reverseSubstitution(value)
     }
 
     encParts.push(`${encKey}=${value}`)
@@ -341,9 +225,7 @@ export function encryptQRCode(decrypted: string): string {
   return encParts.join('|')
 }
 
-// ============================================
-// Форматирование
-// ============================================
+// Форматирование суммы
 export function formatSum(kopeks: string): string {
   const num = parseInt(kopeks, 10)
   if (isNaN(num)) return kopeks
@@ -353,6 +235,7 @@ export function formatSum(kopeks: string): string {
   }).format(num / 100) + ' ₽'
 }
 
+// Форматирование периода
 export function formatPeriod(period: string): string {
   const months = ['', 'Январь', 'Февраль', 'Март', 'Апрель', 'Май', 'Июнь',
                   'Июль', 'Август', 'Сентябрь', 'Октябрь', 'Ноябрь', 'Декабрь']
@@ -362,6 +245,7 @@ export function formatPeriod(period: string): string {
   return `${months[month] || match[1]} ${match[2]}`
 }
 
+// Отображаемое значение для поля
 export function getDisplayValue(name: string, value: string): string {
   if (name === 'Sum') return formatSum(value)
   if (name === 'paymPeriod') return formatPeriod(value)
