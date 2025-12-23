@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { decryptQRCode, getDisplayValue, caesarEncrypt, type DecryptResult } from '@/lib/decrypt'
+import { decryptQRCode, getDisplayValue, encryptQRCode, type DecryptResult } from '@/lib/decrypt'
 import { getHistory, saveToHistory, deleteFromHistory, clearHistory, formatHistoryDate, type HistoryItem } from '@/lib/storage'
 import { formatSum } from '@/lib/decrypt'
 
@@ -37,7 +37,7 @@ export default function Home() {
 
   const handleEncrypt = () => {
     if (!input.trim()) return
-    const encrypted = caesarEncrypt(input, 3)
+    const encrypted = encryptQRCode(input)
     const encryptResult = {
       format: 'Зашифровано',
       fields: [],
@@ -289,7 +289,7 @@ export default function Home() {
             <div className="flex flex-col xl:grid xl:grid-cols-2 gap-6 mb-6">
               {/* Input Section */}
               <div className="card flex flex-col min-h-[280px]">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between mb-4">
                   <label className="text-sm font-medium text-muted">Зашифрованная строка</label>
                   {input && (
                     <button
@@ -326,7 +326,7 @@ export default function Home() {
               {/* Result/Empty State */}
               {result ? (
                 <div className="card flex flex-col animate-fadeInUp">
-                  <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center justify-between mb-4">
                     <label className="text-sm font-medium text-muted">Расшифрованная строка</label>
                     <button
                       onClick={handleCopy}

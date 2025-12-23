@@ -7,6 +7,17 @@ const DECRYPT_MAP: Record<string, string> = {
   'u': 'д', 'v': 'е', 'w': 'ж', 'x': 'з', 'y': 'и', 'z': 'й'
 }
 
+// Таблица шифрования (обратная DECRYPT_MAP + DECRYPT_ALT)
+const ENCRYPT_MAP: Record<string, string> = {
+  'к': 'a', 'л': 'b', 'м': 'c', 'н': 'd', 'о': 'e',
+  'п': 'f', 'р': 'g', 'с': 'h', 'т': 'i', 'у': 'j',
+  'ф': 'k', 'х': 'l', 'ц': 'm', 'ч': 'n', 'ш': 'o',
+  'щ': 'p', 'а': 'q', 'б': 'r', 'в': 's', 'э': 't',
+  'д': 'u', 'е': 'v', 'ж': 'w', 'з': 'x', 'и': 'y', 'й': 'z',
+  // Из DECRYPT_ALT
+  'ъ': 'q', 'ы': 'r', 'ь': 's', 'г': 't', 'ю': 'u', 'я': 'v'
+}
+
 // Стандартная транслитерация Latin → Cyrillic (для префиксов после Caesar -3)
 const TRANSLIT_MAP: Record<string, string> = {
   'a': 'а', 'b': 'б', 'c': 'ц', 'd': 'д', 'e': 'е',
@@ -14,6 +25,15 @@ const TRANSLIT_MAP: Record<string, string> = {
   'k': 'к', 'l': 'л', 'm': 'м', 'n': 'н', 'o': 'о',
   'p': 'п', 'q': 'к', 'r': 'р', 's': 'с', 't': 'т',
   'u': 'у', 'v': 'в', 'w': 'в', 'x': 'кс', 'y': 'ы', 'z': 'з'
+}
+
+// Обратная транслитерация Cyrillic → Latin (для шифрования префиксов)
+const REVERSE_TRANSLIT_MAP: Record<string, string> = {
+  'а': 'a', 'б': 'b', 'ц': 'c', 'д': 'd', 'е': 'e',
+  'ф': 'f', 'г': 'g', 'х': 'h', 'и': 'i', 'й': 'j',
+  'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o',
+  'п': 'p', 'р': 'r', 'с': 's', 'т': 't',
+  'у': 'u', 'в': 'v', 'ы': 'y', 'з': 'z'
 }
 
 // Альтернативные варианты для коллизий (используются при контекстном анализе)
@@ -38,9 +58,25 @@ export function caesarDecrypt(text: string, shift: number = 3): string {
 }
 
 // ============================================
+// Проверка URL (URL не шифруются)
+// ============================================
+function isUrl(text: string): boolean {
+  try {
+    const url = new URL(text)
+    return url.host !== null && url.host !== ''
+  } catch {
+    return false
+  }
+}
+
+// ============================================
 // Шифр Цезаря (шифрование, сдвиг +3)
+// URL адреса НЕ шифруются!
 // ============================================
 export function caesarEncrypt(text: string, shift: number = 3): string {
+  // URL не шифруются
+  if (isUrl(text)) return text
+
   return text.split('').map(char => {
     if (/[a-z]/i.test(char)) {
       const base = char === char.toUpperCase() ? 65 : 97
@@ -128,6 +164,34 @@ function smartSubstitution(text: string): string {
 }
 
 // ============================================
+// Обратная подстановка (Cyrillic → Latin) для шифрования
+// ============================================
+function reverseSubstitution(text: string): string {
+  return text.split('').map(char => {
+    const lower = char.toLowerCase()
+    const mapped = ENCRYPT_MAP[lower]
+    if (mapped) {
+      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
+    }
+    return char
+  }).join('')
+}
+
+// ============================================
+// Обратная транслитерация (Cyrillic → Latin) для шифрования префиксов
+// ============================================
+function reverseTransliterate(text: string): string {
+  return text.split('').map(char => {
+    const lower = char.toLowerCase()
+    const mapped = REVERSE_TRANSLIT_MAP[lower]
+    if (mapped) {
+      return char === char.toUpperCase() ? mapped.toUpperCase() : mapped
+    }
+    return char
+  }).join('')
+}
+
+// ============================================
 // Типы
 // ============================================
 export interface QRField {
@@ -205,6 +269,76 @@ export function decryptQRCode(encrypted: string): DecryptResult {
   const raw = format + '|' + fields.map(f => `${f.name}=${f.value}`).join('|')
 
   return { format, fields, raw }
+}
+
+// ============================================
+// Основная функция шифрования QR кода
+// ============================================
+export function encryptQRCode(decrypted: string): string {
+  // URL не шифруются
+  if (isUrl(decrypted)) return decrypted
+
+  const parts = decrypted.trim().split('|')
+
+  // Формат: ST00012 → VW00012 (только Цезарь)
+  const encFormat = caesarEncrypt(parts[0], 3)
+
+  const encParts: string[] = [encFormat]
+
+  for (let i = 1; i < parts.length; i++) {
+    const eqIndex = parts[i].indexOf('=')
+    if (eqIndex === -1) {
+      encParts.push(parts[i])
+      continue
+    }
+
+    // Ключ: применяем Цезарь +3
+    const name = parts[i].substring(0, eqIndex)
+    const encKey = caesarEncrypt(name, 3)
+
+    // Значение
+    let value = parts[i].substring(eqIndex + 1)
+
+    // Для полей с кириллицей - применяем обратную подстановку
+    if (CYRILLIC_FIELDS.includes(name)) {
+      // Обрабатываем текст в кавычках
+      value = value.replace(/"([^"]+)"/g, (_, match) => {
+        return '"' + reverseSubstitution(match) + '"'
+      })
+
+      // Текст перед кавычками (НБ, АО, ПАО и т.д.)
+      const quoteStart = value.indexOf('"')
+      if (quoteStart > 0) {
+        const prefix = value.substring(0, quoteStart).trim()
+        const rest = value.substring(quoteStart)
+        // 2-буквенные префиксы: транслитерация + Caesar (НБ→NB→QE)
+        // 3+ буквенные: подстановка (ПАО→FQE)
+        const encryptedPrefix = prefix.length <= 2
+          ? caesarEncrypt(reverseTransliterate(prefix), 3)
+          : reverseSubstitution(prefix)
+        value = encryptedPrefix + ' ' + rest
+      }
+
+      // Для Purpose без кавычек: шифруем текст и латиницу после /
+      if (name === 'Purpose' && !value.includes('"')) {
+        const slashIndex = value.indexOf('/')
+        if (slashIndex !== -1) {
+          const beforeSlash = reverseSubstitution(value.substring(0, slashIndex))
+          // Шифровать кириллицу после / (например ЛС → BH)
+          const afterSlash = value.substring(slashIndex).replace(/[А-Яа-яЁё]+/g, match => {
+            return reverseSubstitution(match)
+          })
+          value = beforeSlash + afterSlash
+        } else {
+          value = reverseSubstitution(value)
+        }
+      }
+    }
+
+    encParts.push(`${encKey}=${value}`)
+  }
+
+  return encParts.join('|')
 }
 
 // ============================================
