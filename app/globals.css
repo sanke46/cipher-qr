@@ -1,0 +1,81 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+body {
+  background-color: #121212;
+  color: #FAFAFA;
+}
+
+.btn-primary {
+  @apply px-8 py-3 rounded-xl font-semibold text-white transition-all duration-200;
+  background: linear-gradient(135deg, #6DA3FF 0%, #1C68EA 100%);
+  box-shadow: 0 4px 12px rgba(29, 104, 234, 0.3);
+}
+
+.btn-primary:hover {
+  filter: brightness(1.1);
+  box-shadow: 0 6px 16px rgba(29, 104, 234, 0.4);
+}
+
+.btn-primary:active {
+  filter: brightness(0.95);
+  transform: translateY(1px);
+}
+
+.btn-primary:disabled {
+  @apply opacity-50 cursor-not-allowed;
+}
+
+.btn-secondary {
+  @apply px-6 py-2.5 rounded-xl font-medium transition-all duration-200;
+  background: rgba(62, 129, 243, 0.15);
+  border: 1px solid rgba(62, 129, 243, 0.3);
+  color: #3E81F3;
+}
+
+.btn-secondary:hover {
+  background: rgba(62, 129, 243, 0.25);
+  border-color: rgba(62, 129, 243, 0.5);
+}
+
+.card {
+  @apply p-5 rounded-2xl;
+  background: #1D2023;
+  border: 1px solid rgba(150, 159, 168, 0.1);
+}
+
+.input-area {
+  @apply w-full p-4 rounded-xl text-sm transition-all duration-200;
+  background: #1D2023;
+  border: 1px solid rgba(150, 159, 168, 0.2);
+  color: #FAFAFA;
+  min-height: 120px;
+  resize: vertical;
+  font-family: ui-monospace, monospace;
+}
+
+.input-area:focus {
+  border-color: #3E81F3;
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(62, 129, 243, 0.15);
+}
+
+.input-area::placeholder {
+  color: #969FA8;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeInUp {
+  animation: fadeInUp 0.3s ease-out;
+}
