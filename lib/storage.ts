@@ -9,6 +9,7 @@ export interface HistoryItem {
   result: DecryptResult
   displayName: string  // Name из результата
   displaySum: string   // Сумма
+  actionType: 'decrypt' | 'encrypt'  // Тип действия
 }
 
 // Генерация уникального ID
@@ -49,7 +50,8 @@ export function getHistory(): HistoryItem[] {
 // Сохранить в историю
 export function saveToHistory(
   encrypted: string,
-  result: DecryptResult
+  result: DecryptResult,
+  actionType: 'decrypt' | 'encrypt' = 'decrypt'
 ): HistoryItem {
   const history = getHistory()
 
@@ -76,7 +78,8 @@ export function saveToHistory(
     encrypted,
     result,
     displayName,
-    displaySum: sumField?.value || ''
+    displaySum: sumField?.value || '',
+    actionType
   }
 
   // Добавляем в начало

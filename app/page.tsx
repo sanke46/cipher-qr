@@ -38,12 +38,14 @@ export default function Home() {
   const handleEncrypt = () => {
     if (!input.trim()) return
     const encrypted = caesarEncrypt(input, 3)
-    // Показываем результат шифрования в правом блоке
-    setResult({
+    const encryptResult = {
       format: 'Зашифровано',
       fields: [],
       raw: encrypted
-    })
+    }
+    setResult(encryptResult)
+    saveToHistory(input, encryptResult, 'encrypt')
+    setHistory(getHistory())
   }
 
   const handleCopy = async () => {
@@ -153,7 +155,15 @@ export default function Home() {
                         className="p-3 rounded-xl bg-background/50 cursor-pointer hover:bg-background transition-all group"
                         onClick={() => handleHistorySelect(item)}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          {/* Бейдж действия */}
+                          <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            item.actionType === 'encrypt'
+                              ? 'bg-[#3E81F3]/15 border border-[#3E81F3]/30 text-[#3E81F3]'
+                              : 'bg-gradient-to-br from-[#6DA3FF] to-[#1C68EA] text-white'
+                          }`}>
+                            {item.actionType === 'encrypt' ? 'З' : 'Р'}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-muted mb-1">
                               {formatHistoryDate(item.timestamp)}
@@ -232,7 +242,15 @@ export default function Home() {
                         className="p-3 rounded-xl bg-background/50 cursor-pointer hover:bg-background transition-all group"
                         onClick={() => handleHistorySelect(item)}
                       >
-                        <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3">
+                          {/* Бейдж действия */}
+                          <div className={`w-6 h-6 rounded flex items-center justify-center text-xs font-bold flex-shrink-0 ${
+                            item.actionType === 'encrypt'
+                              ? 'bg-[#3E81F3]/15 border border-[#3E81F3]/30 text-[#3E81F3]'
+                              : 'bg-gradient-to-br from-[#6DA3FF] to-[#1C68EA] text-white'
+                          }`}>
+                            {item.actionType === 'encrypt' ? 'З' : 'Р'}
+                          </div>
                           <div className="flex-1 min-w-0">
                             <div className="text-xs text-muted mb-1">
                               {formatHistoryDate(item.timestamp)}
