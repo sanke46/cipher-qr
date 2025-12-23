@@ -67,24 +67,40 @@ function smartSubstitution(text: string): string {
 
       // Для коллизий выбираем вариант на основе контекста
       if (DECRYPT_ALT[lower]) {
-        const prev = result[result.length - 1] || ''
-        const next = chars[i + 1] ? DECRYPT_MAP[chars[i + 1].toLowerCase()] || '' : ''
+        const nextChar = chars[i + 1]?.toLowerCase() || ''
+        const isNextLetter = nextChar && /[a-z]/.test(nextChar)
 
-        // Эвристики для выбора варианта
-        // 'r' после гласной скорее 'ы', иначе 'б'
+        // Буквы, которые дают русские гласные: e→о, q→а, v→е, y→и
+        const vowelProducingChars = 'eqvy'
+
+        // 't' → 'э' или 'г'
+        // Если после 't' идёт буква дающая гласную → 'г', иначе → 'э'
+        if (lower === 't') {
+          if (vowelProducingChars.includes(nextChar)) {
+            replacement = 'г'
+          } else {
+            replacement = 'э'
+          }
+        }
+
+        // 'r' → 'б' или 'ы'
+        // Если после 'r' идёт другая 'r' или гласная → 'б' (бы, бе, ба...)
+        // Иначе (конец слова, согласная) → 'ы'
         if (lower === 'r') {
-          const vowels = 'аеёиоуыэюя'
-          if (vowels.includes(prev.toLowerCase())) {
+          if (nextChar === 'r' || vowelProducingChars.includes(nextChar)) {
+            replacement = 'б'
+          } else {
             replacement = 'ы'
           }
         }
-        // 't' в начале слова или перед гласной скорее 'э'
-        if (lower === 't') {
-          const vowels = 'аеёиоуыэюя'
-          if (vowels.includes(next.toLowerCase()) || prev === ' ' || prev === '') {
-            replacement = 'э'
+
+        // 'u' → 'д' или 'ю'
+        // В конце слова или перед не-буквой → 'ю', иначе → 'д'
+        if (lower === 'u') {
+          if (!isNextLetter) {
+            replacement = 'ю'
           } else {
-            replacement = 'г'
+            replacement = 'д'
           }
         }
       }
@@ -141,23 +157,31 @@ export function decryptQRCode(encrypted: string): DecryptResult {
         return '"' + smartSubstitution(match) + '"'
       })
 
-      // Текст перед кавычками (НБ, ПАО и т.д.) - Caesar -3, потом транслитерация
+      // Текст перед кавычками (НБ, АО, ПАО и т.д.)
       const quoteStart = value.indexOf('"')
       if (quoteStart > 0) {
         const prefix = value.substring(0, quoteStart).trim()
         const rest = value.substring(quoteStart)
-        const decryptedPrefix = transliterate(caesarDecrypt(prefix, 3))
+        // 2-буквенные префиксы: Caesar + транслитерация (QE→NB→НБ)
+        // 3+ буквенные: подстановка (FQE→ПАО)
+        const decryptedPrefix = prefix.length <= 2
+          ? transliterate(caesarDecrypt(prefix, 3))
+          : smartSubstitution(prefix)
         value = decryptedPrefix + ' ' + rest
       }
 
-      // Для Purpose: расшифровываем текст до первого /
+      // Для Purpose: расшифровываем текст и латиницу после /
       if (name === 'Purpose' && !value.includes('"')) {
         const slashIndex = value.indexOf('/')
         if (slashIndex !== -1) {
-          // Caesar -3, потом транслитерация для текста Purpose
-          value = transliterate(caesarDecrypt(value.substring(0, slashIndex), 3)) + value.substring(slashIndex)
+          const beforeSlash = smartSubstitution(value.substring(0, slashIndex))
+          // Расшифровать латинские буквы после / (например BH → ЛС)
+          const afterSlash = value.substring(slashIndex).replace(/[A-Za-z]+/g, match => {
+            return smartSubstitution(match)
+          })
+          value = beforeSlash + afterSlash
         } else {
-          value = transliterate(caesarDecrypt(value, 3))
+          value = smartSubstitution(value)
         }
       }
     }
