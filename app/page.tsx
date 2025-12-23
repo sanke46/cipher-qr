@@ -38,8 +38,12 @@ export default function Home() {
   const handleEncrypt = () => {
     if (!input.trim()) return
     const encrypted = caesarEncrypt(input, 3)
-    setInput(encrypted)
-    setResult(null)
+    // Показываем результат шифрования в правом блоке
+    setResult({
+      format: 'Зашифровано',
+      fields: [],
+      raw: encrypted
+    })
   }
 
   const handleCopy = async () => {
@@ -155,9 +159,11 @@ export default function Home() {
                               {formatHistoryDate(item.timestamp)}
                             </div>
                             <div className="text-sm truncate">{item.displayName}</div>
-                            <div className="text-accent font-medium text-sm">
-                              {formatSum(item.displaySum)}
-                            </div>
+                            {item.displaySum && (
+                              <div className="text-accent font-medium text-sm">
+                                {formatSum(item.displaySum)}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={(e) => {
@@ -232,9 +238,11 @@ export default function Home() {
                               {formatHistoryDate(item.timestamp)}
                             </div>
                             <div className="text-sm truncate">{item.displayName}</div>
-                            <div className="text-accent font-medium text-sm">
-                              {formatSum(item.displaySum)}
-                            </div>
+                            {item.displaySum && (
+                              <div className="text-accent font-medium text-sm">
+                                {formatSum(item.displaySum)}
+                              </div>
+                            )}
                           </div>
                           <button
                             onClick={(e) => {
@@ -336,8 +344,8 @@ export default function Home() {
               )}
             </div>
 
-            {/* Fields Table - full width when result exists */}
-            {result && (
+            {/* Fields Table - full width when result exists (not for encryption) */}
+            {result && result.format !== 'Зашифровано' && (
               <div className="card animate-fadeInUp">
                 <label className="block text-sm font-medium text-muted mb-3">Поля платежа</label>
                 <div className="overflow-x-auto">

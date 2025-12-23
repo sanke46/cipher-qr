@@ -56,14 +56,27 @@ export function saveToHistory(
   // Извлекаем Name и Sum для отображения
   const nameField = result.fields.find(f => f.name === 'Name')
   const sumField = result.fields.find(f => f.name === 'Sum')
+  const purposeField = result.fields.find(f => f.name === 'Purpose')
+  const bankField = result.fields.find(f => f.name === 'BankName')
+
+  // Определяем что показывать как название
+  let displayName = nameField?.value
+  if (!displayName || displayName === 'Неизвестно') {
+    // Пробуем другие поля
+    displayName = purposeField?.value?.split('/')[0] || bankField?.value
+  }
+  if (!displayName) {
+    // Показываем начало ввода
+    displayName = encrypted.substring(0, 30) + (encrypted.length > 30 ? '...' : '')
+  }
 
   const item: HistoryItem = {
     id: generateId(),
     timestamp: Date.now(),
     encrypted,
     result,
-    displayName: nameField?.value || 'Неизвестно',
-    displaySum: sumField?.value || '0'
+    displayName,
+    displaySum: sumField?.value || ''
   }
 
   // Добавляем в начало
