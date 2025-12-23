@@ -2,20 +2,19 @@
 
 import { useState, useEffect } from 'react'
 import { decryptQRCode, getDisplayValue, type DecryptResult } from '@/lib/decrypt'
-import { getHistory, saveToHistory, deleteFromHistory, clearHistory, type HistoryItem } from '@/lib/storage'
-import HistoryPanel from '@/components/HistoryPanel'
-
-const EXAMPLE_INPUT = `VW00012|Qdph=QE "Cehtdvgtehrri"|ShuvrqdoDff=40702810738360027199|EdqnQdph=FQE "Hrvgrqda Gehhyy"|ELF=044525225|FruuhvsDff=30101810400000000225|Sxusrvh=Efbqiq xq tbvaigetdvgtyu/092023/BH=3519008561/52271|Vxp=52271|shuvDff=3519008561|sdbpShulrg=092023|uhjWbsh=6|WhfkFrgh=02|SdbhhLQQ=7736520080|NSS=997650001`
+import { getHistory, saveToHistory, deleteFromHistory, clearHistory, formatHistoryDate, type HistoryItem } from '@/lib/storage'
+import { formatSum } from '@/lib/decrypt'
 
 export default function Home() {
   const [input, setInput] = useState('')
   const [result, setResult] = useState<DecryptResult | null>(null)
   const [copied, setCopied] = useState(false)
   const [history, setHistory] = useState<HistoryItem[]>([])
+  const [isLoaded, setIsLoaded] = useState(false)
 
-  // Загружаем историю при монтировании
   useEffect(() => {
     setHistory(getHistory())
+    setIsLoaded(true)
   }, [])
 
   const handleDecrypt = () => {
@@ -23,18 +22,11 @@ export default function Home() {
     try {
       const decrypted = decryptQRCode(input)
       setResult(decrypted)
-
-      // Сохраняем в историю
       saveToHistory(input, decrypted)
       setHistory(getHistory())
     } catch (e) {
       console.error('Decryption error:', e)
     }
-  }
-
-  const handleExample = () => {
-    setInput(EXAMPLE_INPUT)
-    setResult(null)
   }
 
   const handleClear = () => {
@@ -67,103 +59,193 @@ export default function Home() {
   }
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-8 md:py-12">
-      <header className="text-center mb-8">
-        <h1 className="text-2xl md:text-3xl font-bold mb-2">
-          CipherQR Decoder
-        </h1>
-        <p className="text-muted">
-          Дешифровка зашифрованных платёжных QR-кодов
-        </p>
+    <div className="min-h-screen">
+      {/* Header */}
+      <header className="border-b border-white/10 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <h1 className="text-xl font-bold">ПиП QR-Decoder</h1>
+          <p className="text-sm text-muted">Дешифровка платёжных QR-кодов</p>
+        </div>
       </header>
 
-      {/* Input Section */}
-      <div className="card mb-6">
-        <textarea
-          className="input-area"
-          placeholder="Вставьте зашифрованную строку QR-кода..."
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-        />
-        <div className="flex flex-wrap gap-3 mt-4">
-          <button
-            className="btn-primary"
-            onClick={handleDecrypt}
-            disabled={!input.trim()}
-          >
-            Расшифровать
-          </button>
-          <button className="btn-secondary" onClick={handleExample}>
-            Пример
-          </button>
-          <button className="btn-secondary" onClick={handleClear}>
-            Очистить
-          </button>
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        <div className="flex gap-6">
+          {/* Left Sidebar - History */}
+          <aside className="w-80 flex-shrink-0">
+            <div className="sticky top-24">
+              <div className="card p-4">
+                {/* Header */}
+                <div className="flex items-center justify-between mb-4 pb-3 border-b border-white/10">
+                  <h2 className="font-semibold">История</h2>
+                  {history.length > 0 && (
+                    <button
+                      onClick={handleHistoryClear}
+                      className="text-xs text-muted hover:text-error transition-colors"
+                    >
+                      Очистить
+                    </button>
+                  )}
+                </div>
+
+                {/* Content */}
+                {!isLoaded ? (
+                  <div className="space-y-2">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="p-3 rounded-xl bg-background/50 animate-pulse">
+                        <div className="h-3 w-24 bg-white/10 rounded mb-2"></div>
+                        <div className="h-4 w-32 bg-white/10 rounded mb-1"></div>
+                        <div className="h-4 w-20 bg-white/10 rounded"></div>
+                      </div>
+                    ))}
+                  </div>
+                ) : history.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-3xl mb-2 opacity-50">📋</div>
+                    <p className="text-muted text-sm">История пуста</p>
+                    <p className="text-muted/50 text-xs mt-1">Расшифрованные QR-коды<br/>появятся здесь</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[calc(100vh-240px)] overflow-y-auto">
+                    {history.map((item) => (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl bg-background/50 cursor-pointer hover:bg-background transition-all group"
+                        onClick={() => handleHistorySelect(item)}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-xs text-muted mb-1">
+                              {formatHistoryDate(item.timestamp)}
+                            </div>
+                            <div className="text-sm truncate">{item.displayName}</div>
+                            <div className="text-accent font-medium text-sm">
+                              {formatSum(item.displaySum)}
+                            </div>
+                          </div>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleHistoryDelete(item.id)
+                            }}
+                            className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-error/20 transition-all"
+                            title="Удалить"
+                          >
+                            <svg className="w-3.5 h-3.5 text-error" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </aside>
+
+          {/* Main Content */}
+          <main className="flex-1 min-w-0">
+            {/* Top Row - Input Form & Result side by side */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-6">
+              {/* Input Section */}
+              <div className="card flex flex-col min-h-[280px]">
+                <label className="block text-sm font-medium text-muted mb-2">
+                  Зашифрованная строка
+                </label>
+                <textarea
+                  className="input-area flex-1 min-h-[140px]"
+                  placeholder="Вставьте зашифрованную строку QR-кода..."
+                  value={input}
+                  onChange={(e) => setInput(e.target.value)}
+                />
+                <div className="flex flex-wrap gap-3 mt-4">
+                  <button
+                    className="btn-primary"
+                    onClick={handleDecrypt}
+                    disabled={!input.trim()}
+                  >
+                    Расшифровать
+                  </button>
+                  <button className="btn-secondary" onClick={handleClear}>
+                    Очистить
+                  </button>
+                </div>
+              </div>
+
+              {/* Result/Empty State */}
+              <div className="min-h-[280px]">
+                {result ? (
+                  <div className="animate-fadeInUp h-full">
+                    <div className="card h-full flex flex-col">
+                      <div className="flex items-center justify-between mb-2">
+                        <label className="text-sm font-medium text-muted">Расшифрованная строка</label>
+                        <button
+                          onClick={handleCopy}
+                          className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
+                        >
+                          {copied ? (
+                            <>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                              </svg>
+                              Скопировано
+                            </>
+                          ) : (
+                            <>
+                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                              </svg>
+                              Копировать
+                            </>
+                          )}
+                        </button>
+                      </div>
+                      <code className="block text-sm break-all text-muted/80 bg-background/50 p-3 rounded-lg flex-1 overflow-y-auto">
+                        {result.raw}
+                      </code>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="card h-full flex flex-col items-center justify-center text-center">
+                    <div className="text-4xl mb-3">🔐</div>
+                    <p className="text-muted">Вставьте зашифрованную строку</p>
+                    <p className="text-muted/60 text-sm mt-1">Или нажмите "Пример"</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Fields Table - full width when result exists */}
+            {result && (
+              <div className="card animate-fadeInUp">
+                <label className="block text-sm font-medium text-muted mb-3">Поля платежа</label>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-white/10">
+                        <th className="text-left py-2 pr-4 font-medium text-muted w-1/4">Поле</th>
+                        <th className="text-left py-2 font-medium text-muted">Значение</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="border-b border-white/5">
+                        <td className="py-2.5 pr-4 text-accent">Формат</td>
+                        <td className="py-2.5">{result.format}</td>
+                      </tr>
+                      {result.fields.map((field, i) => (
+                        <tr key={i} className="border-b border-white/5 last:border-0">
+                          <td className="py-2.5 pr-4 text-accent">{field.name}</td>
+                          <td className="py-2.5">{getDisplayValue(field.name, field.value)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
+          </main>
         </div>
       </div>
-
-      {/* Result Section */}
-      {result && (
-        <div className="animate-fadeInUp">
-          <h2 className="text-lg font-semibold mb-3">Результат</h2>
-
-          {/* Raw Output */}
-          <div className="card mb-4">
-            <div className="flex items-start justify-between gap-2">
-              <code className="text-sm break-all text-muted flex-1">
-                {result.raw}
-              </code>
-              <button
-                onClick={handleCopy}
-                className="p-2 rounded-lg hover:bg-white/10 transition-colors flex-shrink-0"
-                title="Копировать"
-              >
-                {copied ? (
-                  <svg className="w-5 h-5 text-success" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                  </svg>
-                ) : (
-                  <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                )}
-              </button>
-            </div>
-          </div>
-
-          {/* Fields Table */}
-          <div className="card overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-white/10">
-                  <th className="text-left py-2 pr-4 font-medium text-muted">Поле</th>
-                  <th className="text-left py-2 font-medium text-muted">Значение</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-b border-white/5">
-                  <td className="py-2 pr-4 text-accent">Формат</td>
-                  <td className="py-2">{result.format}</td>
-                </tr>
-                {result.fields.map((field, i) => (
-                  <tr key={i} className="border-b border-white/5 last:border-0">
-                    <td className="py-2 pr-4 text-accent">{field.name}</td>
-                    <td className="py-2">{getDisplayValue(field.name, field.value)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-
-      {/* History Section */}
-      <HistoryPanel
-        history={history}
-        onSelect={handleHistorySelect}
-        onDelete={handleHistoryDelete}
-        onClear={handleHistoryClear}
-      />
-    </main>
+    </div>
   )
 }
