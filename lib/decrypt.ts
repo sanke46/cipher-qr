@@ -38,6 +38,19 @@ export function caesarDecrypt(text: string, shift: number = 3): string {
 }
 
 // ============================================
+// Шифр Цезаря (шифрование, сдвиг +3)
+// ============================================
+export function caesarEncrypt(text: string, shift: number = 3): string {
+  return text.split('').map(char => {
+    if (/[a-z]/i.test(char)) {
+      const base = char === char.toUpperCase() ? 65 : 97
+      return String.fromCharCode(((char.charCodeAt(0) - base + shift) % 26) + base)
+    }
+    return char
+  }).join('')
+}
+
+// ============================================
 // Стандартная транслитерация (для префиксов)
 // ============================================
 function transliterate(text: string): string {

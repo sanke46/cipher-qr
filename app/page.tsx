@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { decryptQRCode, getDisplayValue, type DecryptResult } from '@/lib/decrypt'
+import { decryptQRCode, getDisplayValue, caesarEncrypt, type DecryptResult } from '@/lib/decrypt'
 import { getHistory, saveToHistory, deleteFromHistory, clearHistory, formatHistoryDate, type HistoryItem } from '@/lib/storage'
 import { formatSum } from '@/lib/decrypt'
 
@@ -32,6 +32,13 @@ export default function Home() {
 
   const handleClear = () => {
     setInput('')
+    setResult(null)
+  }
+
+  const handleEncrypt = () => {
+    if (!input.trim()) return
+    const encrypted = caesarEncrypt(input, 3)
+    setInput(encrypted)
     setResult(null)
   }
 
@@ -256,9 +263,20 @@ export default function Home() {
             <div className="flex flex-col xl:grid xl:grid-cols-2 gap-6 mb-6">
               {/* Input Section */}
               <div className="card flex flex-col min-h-[280px]">
-                <label className="block text-sm font-medium text-muted mb-2">
-                  Зашифрованная строка
-                </label>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-sm font-medium text-muted">Зашифрованная строка</label>
+                  {input && (
+                    <button
+                      onClick={handleClear}
+                      className="flex items-center gap-1.5 text-xs text-accent hover:text-accent-light transition-colors"
+                    >
+                      <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Стереть
+                    </button>
+                  )}
+                </div>
                 <textarea
                   className="input-area flex-1 min-h-[140px]"
                   placeholder="Вставьте зашифрованную строку QR-кода..."
@@ -273,8 +291,8 @@ export default function Home() {
                   >
                     Расшифровать
                   </button>
-                  <button className="btn-secondary" onClick={handleClear}>
-                    Очистить
+                  <button className="btn-secondary" onClick={handleEncrypt} disabled={!input.trim()}>
+                    Зашифровать
                   </button>
                 </div>
               </div>
